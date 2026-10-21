@@ -1,35 +1,51 @@
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Deeds-DcS Circuit Viewer & Simulator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>DeedsOnline — Circuit CAD & Simulator</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    background: #e8e8e8;
-    color: #333;
+    background: #e5e5e5;
+    color: #222;
     font-family: Arial, sans-serif;
     overflow: hidden;
     user-select: none;
     -webkit-user-select: none;
+    touch-action: none;
   }
-  #toolbar {
+
+  /* Панель управления */
+  #app-bar {
     position: absolute;
-    top: 10px;
-    left: 10px;
+    top: 8px;
+    left: 8px;
+    right: 8px;
     z-index: 100;
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    background: #f7f5f0;
-    padding: 6px 12px;
+    gap: 5px;
+    background: #f8f6f0;
+    padding: 6px 10px;
     border-radius: 6px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.25);
-    border: 1px solid #c2bead;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.22);
+    border: 1px solid #bfbaa8;
     align-items: center;
+    max-height: 48vh;
+    overflow-y: auto;
   }
+
+  .btn-group {
+    display: inline-flex;
+    gap: 4px;
+    align-items: center;
+    border-right: 1px solid #d0ccbc;
+    padding-right: 6px;
+    margin-right: 2px;
+  }
+  .btn-group:last-child { border-right: none; }
+
   button, label.btn {
     background: #eae6d8;
     color: #222;
@@ -41,55 +57,106 @@
     font-weight: bold;
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     box-shadow: inset 0 1px 0 #fff;
+    white-space: nowrap;
+    touch-action: manipulation;
   }
   button:hover, label.btn:hover { background: #f3f0e6; border-color: #6d695b; }
   button:active, label.btn:active { background: #dad5c3; transform: translateY(1px); }
-  button:disabled { opacity: 0.5; cursor: default; }
+  button:disabled { opacity: 0.45; cursor: default; }
 
-  #btn-sim-start { color: #006600; }
-  #btn-sim-stop { color: #aa0000; }
-  .sim-active { background: #cce7cc !important; border-color: #27ae60 !important; }
+  button.active-tool {
+    background: #fff8d6 !important;
+    border-color: #b8860b !important;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.18) !important;
+  }
+
+  #btn-sim-start { color: #007700; }
+  #btn-sim-stop { color: #bb0000; }
+  .sim-running { background: #d7f0d7 !important; border-color: #27ae60 !important; }
 
   input[type="file"] { display: none; }
-  #info { font-size: 12px; color: #555; margin-left: 6px; }
-  
+  #info { font-size: 11.5px; color: #555; margin-left: 4px; }
+
+  /* Холст схемы */
   #canvas-container {
     width: 100vw;
     height: 100vh;
     cursor: grab;
     background-color: #ffffff;
-    background-image: radial-gradient(#d5d5d5 1.2px, transparent 1.2px);
+    background-image: radial-gradient(#d2d2d2 1.2px, transparent 1.2px);
     background-size: 24px 24px;
+    touch-action: none;
   }
   #canvas-container:active { cursor: grabbing; }
+  .mode-wire #canvas-container { cursor: crosshair; }
+  .mode-delete #canvas-container { cursor: not-allowed; }
 
-  svg { width: 100%; height: 100%; display: block; }
-  .wire { stroke-linecap: square; stroke-linejoin: miter; transition: stroke 0.08s ease; }
+  svg { width: 100%; height: 100%; display: block; touch-action: none; }
+  .wire { stroke-linecap: square; stroke-linejoin: miter; cursor: pointer; }
+  .junction { cursor: pointer; }
   .gate-body { fill: #ffffea; stroke: #000000; stroke-width: 1.8; stroke-linejoin: round; }
-  .gate-pin { stroke-linecap: square; transition: stroke 0.08s ease; }
+  .gate-pin { stroke-linecap: square; }
   .gate-bubble { fill: #ffffea; stroke: #000000; stroke-width: 1.8; }
   .label-title { font-family: Arial, sans-serif; font-size: 13px; font-weight: bold; fill: #600000; text-anchor: middle; }
   .task-num { font-family: Arial, sans-serif; font-size: 20px; font-weight: bold; fill: #8b0000; }
-  
-  .comp-switch { cursor: pointer; }
-  .comp-switch:hover rect { filter: brightness(0.96); }
+
+  .component { cursor: grab; touch-action: none; }
+  .component:active { cursor: grabbing; }
+
+  #temp-wire { stroke: #008000; stroke-width: 2; stroke-dasharray: 4 4; pointer-events: none; }
+  #snap-cursor { fill: #e74c3c; pointer-events: none; opacity: 0.6; }
 </style>
 </head>
 <body>
 
-<div id="toolbar">
-  <label class="btn">
-    📁 Открыть (.pbs / .txt)
-    <input type="file" id="file-input">
-  </label>
-  <button id="btn-sim-start">▶ Запуск</button>
-  <button id="btn-sim-stop" disabled>⏹ Стоп</button>
-  <button id="btn-fit">📐 Вписать</button>
-  <button id="btn-reset-zoom">🔍 100%</button>
-  <button id="btn-export-png">📸 Сохранить PNG</button>
-  <span id="info">Схема не загружена</span>
+<div id="app-bar">
+  <!-- Файлы -->
+  <div class="btn-group">
+    <label class="btn" title="Открыть .pbs или дамп .txt">
+      📁 Открыть
+      <input type="file" id="file-input">
+    </label>
+    <button id="btn-save-json" title="Сохранить схему в файл">💾 Сохранить</button>
+    <button id="btn-export-png" title="Скачать PNG">📸 PNG</button>
+  </div>
+
+  <!-- Симуляция -->
+  <div class="btn-group">
+    <button id="btn-sim-start">▶ Запуск</button>
+    <button id="btn-sim-stop" disabled>⏹ Стоп</button>
+  </div>
+
+  <!-- Инструменты -->
+  <div class="btn-group">
+    <button id="tool-select" class="active-tool" title="Выбор и перемещение">🖐 Выбор</button>
+    <button id="tool-wire" title="Чертить провод">✏️ Провод</button>
+    <button id="tool-delete" title="Удалить объект">🗑 Удалить</button>
+  </div>
+
+  <!-- Элементы -->
+  <div class="btn-group">
+    <button data-add="INPUT" title="Тумблер">+ Вход</button>
+    <button data-add="OUTPUT" title="Индикатор">+ Выход</button>
+    <button data-add="NOT">+ NOT</button>
+    <button data-add="AND">+ AND</button>
+    <button data-add="OR">+ OR</button>
+    <button data-add="NAND">+ NAND</button>
+    <button data-add="NOR">+ NOR</button>
+    <button data-add="XOR">+ XOR</button>
+    <button data-add="JUNCTION" title="Узел связи">+ Узел</button>
+    <button data-add="LABEL" title="Номер задания">+ Метка</button>
+  </div>
+
+  <!-- Экран -->
+  <div class="btn-group">
+    <button id="btn-fit">📐 Вписать</button>
+    <button id="btn-reset-zoom">🔍 100%</button>
+    <button id="btn-clear" style="color: #990000;">🧹 Очистить</button>
+  </div>
+
+  <span id="info">Схема пуста</span>
 </div>
 
 <div id="canvas-container">
@@ -98,37 +165,56 @@
     <g id="viewport">
       <g id="wires-layer"></g>
       <g id="components-layer"></g>
+      <line id="temp-wire" x1="0" y1="0" x2="0" y2="0" style="display: none;" />
+      <circle id="snap-cursor" cx="0" cy="0" r="3.5" style="display: none;" />
     </g>
   </svg>
 </div>
 
 <script>
-const S = 6.0; // 1 единица сетки Deeds = 6px
-let circuitData = null;
-let transform = { x: 40, y: 40, k: 1.0 };
-let isPanning = false;
-let startPan = { x: 0, y: 0 };
+const S = 6.0; // Сетка Deeds = 6px
+let circuitData = { elements: [] };
+let transform = { x: 40, y: 70, k: 1.0 };
+let currentTool = "select"; // "select", "wire", "delete"
+let nextObjId = 1000;
 
-// Состояния симулятора
+// Симуляция
 let isSimulating = false;
 let inputStates = {};
 let outputStates = {};
 let netlist = null;
 let netValues = {};
 
+// Черчение проводов
+let wireStartPoint = null;
+
+// Универсальное управление Pointer Events (ПК + Сенсор)
+const activePointers = new Map();
+let dragTarget = null;
+let dragStartPointer = { x: 0, y: 0 };
+let dragOriginalPos = { x: 0, y: 0 };
+let dragHasMoved = false;
+
+let isPanning = false;
+let panStart = { x: 0, y: 0 };
+let pinchInitialDist = 0;
+let pinchInitialScale = 1;
+
 const svg = document.getElementById("schematic-svg");
 const viewport = document.getElementById("viewport");
 const wiresLayer = document.getElementById("wires-layer");
 const componentsLayer = document.getElementById("components-layer");
+const tempWire = document.getElementById("temp-wire");
+const snapCursor = document.getElementById("snap-cursor");
+const container = document.getElementById("canvas-container");
 const info = document.getElementById("info");
 const btnStart = document.getElementById("btn-sim-start");
 const btnStop = document.getElementById("btn-sim-stop");
 
-// --- ПАРСЕРЫ ФОРМАТОВ ---
+// --- ПАРСЕРЫ ФОРМАТОВ (PBS / XXD / JSON) ---
 function parseXXD(text) {
   let bytes = [];
-  const lines = text.split(/\r?\n/);
-  for (let line of lines) {
+  for (let line of text.split(/\r?\n/)) {
     let m = line.match(/^[0-9a-fA-F]{4,8}:\s+((?:[0-9a-fA-F]{2,4}\s*)+)/);
     if (m) {
       let hex = m[1].replace(/\s+/g, '');
@@ -223,7 +309,22 @@ function parsePBS(buffer) {
   return { elements };
 }
 
-// --- ПОСТРОЕНИЕ ЭЛЕКТРИЧЕСКОГО ГРАФА СВЯЗЕЙ (NETLIST) ---
+// --- ПРЕОБРАЗОВАНИЕ КООРДИНАТ ---
+function screenToGrid(clientX, clientY) {
+  const svgP = svg.createSVGPoint();
+  svgP.x = clientX;
+  svgP.y = clientY;
+  const inv = viewport.getScreenCTM().inverse();
+  const world = svgP.matrixTransform(inv);
+  return {
+    gx: Math.round(world.x / S),
+    gy: Math.round(world.y / S),
+    wx: Math.round(world.x / S) * S,
+    wy: Math.round(world.y / S) * S
+  };
+}
+
+// --- ПОСТРОЕНИЕ СЕТИ ЦЕПЕЙ (NETLIST) ---
 function pointTouchesWire(px, py, w) {
   const minX = Math.min(w.x1, w.x2);
   const maxX = Math.max(w.x1, w.x2);
@@ -256,14 +357,12 @@ function buildNetlist(data) {
     if (rootI !== rootJ) parent[rootI] = rootJ;
   }
 
-  // 1. Объединяем соприкасающиеся проводники
   for (let i = 0; i < N; i++) {
     for (let j = i + 1; j < N; j++) {
       if (wiresTouch(wires[i], wires[j])) union(i, j);
     }
   }
 
-  // 2. Объединяем проводники, соединяющиеся через узлы
   junctions.forEach(junc => {
     const connected = [];
     wires.forEach((w, idx) => {
@@ -274,10 +373,7 @@ function buildNetlist(data) {
     }
   });
 
-  // Присваиваем ID цепи каждому проводу
-  wires.forEach((w, idx) => {
-    w.netId = find(idx);
-  });
+  wires.forEach((w, idx) => { w.netId = find(idx); });
   junctions.forEach(j => {
     const w = wires.find(w => pointTouchesWire(j.x, j.y, w));
     j.netId = w ? find(wires.indexOf(w)) : -1;
@@ -288,10 +384,7 @@ function buildNetlist(data) {
     return idx !== -1 ? find(idx) : null;
   }
 
-  // 3. Подключаем ножки элементов к цепям
-  const inputs = [];
-  const outputs = [];
-  const gates = [];
+  const inputs = [], outputs = [], gates = [];
 
   data.elements.forEach(elem => {
     if (elem.type === "INPUT") {
@@ -319,72 +412,71 @@ function buildNetlist(data) {
   return { wires, junctions, inputs, outputs, gates, netIds: uniqueNets };
 }
 
-// --- ЛОГИЧЕСКИЙ ДВИЖОК СИМУЛЯЦИИ ---
+// --- ЛОГИЧЕСКИЙ ДВИЖОК СИМУЛЯТОРА ---
 function runSimulation() {
   if (!isSimulating || !netlist) return;
 
-  // Инициализация цепей нулями
-  netlist.netIds.forEach(id => {
-    if (netValues[id] === undefined) netValues[id] = 0;
-  });
+  netValues = {};
+  netlist.netIds.forEach(id => { netValues[id] = 0; });
 
-  // Распространение сигналов до стабилизации
-  for (let iter = 0; iter < 30; iter++) {
+  for (let iter = 0; iter < 40; iter++) {
     let changed = false;
 
-    // 1. Выходы тумблеров
+    // Входы
     netlist.inputs.forEach(inp => {
-      const val = inputStates[inp.id] !== undefined ? inputStates[inp.id] : 0;
-      if (inp.outNet !== null && netValues[inp.outNet] !== val) {
-        netValues[inp.outNet] = val;
-        changed = true;
+      const val = (inputStates[inp.id] !== undefined) ? inputStates[inp.id] : 0;
+      if (inp.outNet !== null && inp.outNet !== undefined) {
+        if (netValues[inp.outNet] !== val) {
+          netValues[inp.outNet] = val;
+          changed = true;
+        }
       }
     });
 
-    // 2. Логические вентили
+    // Логические вентили
     netlist.gates.forEach(gate => {
       let out = 0;
       if (gate.type === "NOT") {
-        const inVal = gate.inNet !== null ? (netValues[gate.inNet] || 0) : 0;
-        out = inVal === 1 ? 0 : 1;
+        const inVal = (gate.inNet !== null && gate.inNet !== undefined) ? (netValues[gate.inNet] || 0) : 0;
+        out = (inVal === 1) ? 0 : 1;
       } else {
-        const in1 = gate.inNet1 !== null ? (netValues[gate.inNet1] || 0) : 0;
-        const in2 = gate.inNet2 !== null ? (netValues[gate.inNet2] || 0) : 0;
+        const in1 = (gate.inNet1 !== null && gate.inNet1 !== undefined) ? (netValues[gate.inNet1] || 0) : 0;
+        const in2 = (gate.inNet2 !== null && gate.inNet2 !== undefined) ? (netValues[gate.inNet2] || 0) : 0;
         if (gate.type === "AND") out = (in1 === 1 && in2 === 1) ? 1 : 0;
         else if (gate.type === "NAND") out = (in1 === 1 && in2 === 1) ? 0 : 1;
         else if (gate.type === "OR") out = (in1 === 1 || in2 === 1) ? 1 : 0;
         else if (gate.type === "NOR") out = (in1 === 1 || in2 === 1) ? 0 : 1;
-        else if (gate.type === "XOR") out = (in1 ^ in2) ? 1 : 0;
+        else if (gate.type === "XOR") out = (in1 !== in2) ? 1 : 0;
         else if (gate.type === "XNOR") out = (in1 === in2) ? 1 : 0;
       }
 
-      if (gate.outNet !== null && netValues[gate.outNet] !== out) {
-        netValues[gate.outNet] = out;
-        changed = true;
+      if (gate.outNet !== null && gate.outNet !== undefined) {
+        if (netValues[gate.outNet] !== out) {
+          netValues[gate.outNet] = out;
+          changed = true;
+        }
       }
     });
 
     if (!changed) break;
   }
 
-  // 3. Выходные индикаторы
+  // Выходы
   netlist.outputs.forEach(outElem => {
-    outputStates[outElem.id] = outElem.inNet !== null ? (netValues[outElem.inNet] || 0) : 0;
+    outputStates[outElem.id] = (outElem.inNet !== null && outElem.inNet !== undefined) ? (netValues[outElem.inNet] || 0) : 0;
   });
 
   updateVisuals();
 }
 
-// Обновление стилей и цветов (без полной перерисовки DOM для гладкости)
 function updateVisuals() {
-  const COLOR_0 = "#0022cc"; // Deeds синий для лог. 0
-  const COLOR_1 = "#e00000"; // Deeds красный для лог. 1
-  const COLOR_OFF = "#008000"; // Зелёный для режима стоп
+  const COLOR_0 = "#0022cc"; // Deeds синий
+  const COLOR_1 = "#e00000"; // Deeds красный
+  const COLOR_OFF = "#008000"; // Зеленый чертежный
 
-  // Обновление проводов
   document.querySelectorAll(".wire").forEach(line => {
     const netId = parseInt(line.dataset.net);
-    if (!isSimulating || isNaN(netId)) {
+    if (!isSimulating || isNaN(netId) || netId < 0) {
       line.setAttribute("stroke", COLOR_OFF);
       line.setAttribute("stroke-width", "2");
     } else {
@@ -394,10 +486,9 @@ function updateVisuals() {
     }
   });
 
-  // Обновление узлов
   document.querySelectorAll(".junction").forEach(dot => {
     const netId = parseInt(dot.dataset.net);
-    if (!isSimulating || isNaN(netId)) {
+    if (!isSimulating || isNaN(netId) || netId < 0) {
       dot.setAttribute("fill", "#000000");
     } else {
       const val = netValues[netId] || 0;
@@ -405,10 +496,9 @@ function updateVisuals() {
     }
   });
 
-  // Обновление ножек логических элементов
   document.querySelectorAll(".gate-pin").forEach(pin => {
     const netId = parseInt(pin.dataset.net);
-    if (!isSimulating || isNaN(netId)) {
+    if (!isSimulating || isNaN(netId) || netId < 0) {
       pin.setAttribute("stroke", COLOR_OFF);
       pin.setAttribute("stroke-width", "2");
     } else {
@@ -418,23 +508,34 @@ function updateVisuals() {
     }
   });
 
-  // Обновление индикаторов OUTPUT
-  if (circuitData) {
-    circuitData.elements.filter(e => e.type === "OUTPUT").forEach(elem => {
-      const g = document.querySelector(`.component[data-id="${elem.id}"]`);
-      if (g) {
-        const txt = g.querySelector(".out-val");
-        if (txt) {
-          const val = isSimulating ? (outputStates[elem.id] || 0) : 0;
-          txt.textContent = val;
-          txt.setAttribute("fill", isSimulating && val === 1 ? COLOR_1 : COLOR_0);
-        }
+  circuitData.elements.filter(e => e.type === "OUTPUT").forEach(elem => {
+    const g = document.querySelector(`.component[data-id="${elem.id}"]`);
+    if (g) {
+      const txt = g.querySelector(".out-val");
+      if (txt) {
+        const val = isSimulating ? (outputStates[elem.id] || 0) : 0;
+        txt.textContent = val;
+        txt.setAttribute("fill", isSimulating && val === 1 ? COLOR_1 : COLOR_0);
       }
-    });
-  }
+    }
+  });
+
+  circuitData.elements.filter(e => e.type === "INPUT").forEach(elem => {
+    const g = document.querySelector(`.component[data-id="${elem.id}"]`);
+    if (g) {
+      const val = (inputStates[elem.id] !== undefined) ? inputStates[elem.id] : 0;
+      const nY = val === 1 ? -22 : -36;
+      const lb = g.querySelector(".lever-body");
+      const lh = g.querySelector(".lever-handle");
+      const sv = g.querySelector(".sw-val");
+      if (lb) lb.setAttribute("y", nY);
+      if (lh) lh.setAttribute("y", nY + 8);
+      if (sv) sv.textContent = val;
+    }
+  });
 }
 
-// --- ОТРИСОВКА СХЕМЫ ---
+// --- ОТРИСОВКА SVG ---
 function renderCircuit(data) {
   wiresLayer.innerHTML = "";
   componentsLayer.innerHTML = "";
@@ -451,6 +552,7 @@ function renderCircuit(data) {
       line.setAttribute("x2", elem.x2 * S);
       line.setAttribute("y2", elem.y2 * S);
       line.setAttribute("class", "wire");
+      line.dataset.id = elem.id;
       line.dataset.net = elem.netId !== undefined ? elem.netId : -1;
       wiresLayer.appendChild(line);
     } 
@@ -460,6 +562,7 @@ function renderCircuit(data) {
       dot.setAttribute("cy", elem.y * S);
       dot.setAttribute("r", 3.2);
       dot.setAttribute("class", "junction");
+      dot.dataset.id = elem.id;
       dot.dataset.net = elem.netId !== undefined ? elem.netId : -1;
       wiresLayer.appendChild(dot);
     }
@@ -520,7 +623,6 @@ function renderCircuit(data) {
       `;
     }
     else if (elem.type === "INPUT") {
-      g.classList.add("comp-switch");
       const lbl = elem.label || "In";
       if (inputStates[elem.id] === undefined) inputStates[elem.id] = 0;
       const val = inputStates[elem.id];
@@ -536,19 +638,6 @@ function renderCircuit(data) {
         <rect x="28" y="-42" width="38" height="36" fill="#ffffff" stroke="#999" />
         <text class="sw-val" x="47" y="-17" font-size="22" font-weight="bold" fill="#c00000" font-family="'Courier New', monospace" text-anchor="middle">${val}</text>
       `;
-
-      // Клик по тумблеру
-      g.onclick = (e) => {
-        e.stopPropagation();
-        inputStates[elem.id] = inputStates[elem.id] === 1 ? 0 : 1;
-        const nVal = inputStates[elem.id];
-        const nY = nVal === 1 ? -22 : -36;
-        g.querySelector(".lever-body").setAttribute("y", nY);
-        g.querySelector(".lever-handle").setAttribute("y", nY + 8);
-        g.querySelector(".sw-val").textContent = nVal;
-
-        if (isSimulating) runSimulation();
-      };
     } 
     else if (elem.type === "OUTPUT") {
       const lbl = elem.label || "Y";
@@ -569,30 +658,293 @@ function renderCircuit(data) {
 
   updateTransform();
   updateVisuals();
+  info.innerText = `Элементов: ${circuitData.elements.length}`;
 }
 
-// --- КНОПКИ ЗАПУСКА И СТОПА ---
+// --- УНИВЕРСАЛЬНАЯ ОБРАБОТКА POINTER EVENTS (ПК + СМАРТФОН) ---
+container.addEventListener("pointerdown", (e) => {
+  activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+  if (activePointers.size === 1) {
+    const compG = e.target.closest(".component");
+    const wireLine = e.target.closest(".wire");
+    const juncDot = e.target.closest(".junction");
+
+    // Инструмент УДАЛЕНИЕ
+    if (currentTool === "delete") {
+      if (compG) deleteElement(parseInt(compG.dataset.id));
+      else if (wireLine) deleteElement(parseInt(wireLine.dataset.id));
+      else if (juncDot) deleteElement(parseInt(juncDot.dataset.id));
+      return;
+    }
+
+    // Инструмент ЧЕРЧЕНИЕ ПРОВОДА
+    if (currentTool === "wire") {
+      const pt = screenToGrid(e.clientX, e.clientY);
+      if (!wireStartPoint) {
+        wireStartPoint = { gx: pt.gx, gy: pt.gy, wx: pt.wx, wy: pt.wy };
+        tempWire.setAttribute("x1", pt.wx);
+        tempWire.setAttribute("y1", pt.wy);
+        tempWire.setAttribute("x2", pt.wx);
+        tempWire.setAttribute("y2", pt.wy);
+        tempWire.style.display = "block";
+      } else {
+        const x1 = wireStartPoint.gx;
+        const y1 = wireStartPoint.gy;
+        const x2 = pt.gx;
+        const y2 = pt.gy;
+
+        if (x1 !== x2 || y1 !== y2) {
+          // Если кликнули по диагонали — создаем два чистых прямоугольных проводника Deeds
+          if (x1 !== x2 && y1 !== y2) {
+            circuitData.elements.push({ id: nextObjId++, type: "WIRE", x1: x1, y1: y1, x2: x2, y2: y1 });
+            circuitData.elements.push({ id: nextObjId++, type: "WIRE", x1: x2, y1: y1, x2: x2, y2: y2 });
+          } else {
+            circuitData.elements.push({ id: nextObjId++, type: "WIRE", x1: x1, y1: y1, x2: x2, y2: y2 });
+          }
+          renderCircuit(circuitData);
+          if (isSimulating) runSimulation();
+        }
+        wireStartPoint = null;
+        tempWire.style.display = "none";
+      }
+      return;
+    }
+
+    // Инструмент ВЫБОР / ПЕРЕМЕЩЕНИЕ
+    if (currentTool === "select" && compG) {
+      const id = parseInt(compG.dataset.id);
+      const elem = circuitData.elements.find(el => el.id === id);
+      if (elem) {
+        dragTarget = { elem, g: compG, id };
+        dragStartPointer = { x: e.clientX, y: e.clientY };
+        dragOriginalPos = { x: elem.x, y: elem.y };
+        dragHasMoved = false;
+        try { compG.setPointerCapture(e.pointerId); } catch(_) {}
+        return;
+      }
+    }
+
+    // Если кликнули мимо компонентов — панорамирование холста
+    isPanning = true;
+    panStart.x = e.clientX - transform.x;
+    panStart.y = e.clientY - transform.y;
+  } 
+  // Два пальца на экране — жест Pinch-to-Zoom
+  else if (activePointers.size === 2) {
+    if (dragTarget) {
+      dragTarget.elem.x = dragOriginalPos.x;
+      dragTarget.elem.y = dragOriginalPos.y;
+      dragTarget.g.setAttribute("transform", `translate(${dragTarget.elem.x * S}, ${dragTarget.elem.y * S})`);
+      dragTarget = null;
+    }
+    isPanning = false;
+    const pts = Array.from(activePointers.values());
+    pinchInitialDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    pinchInitialScale = transform.k;
+  }
+});
+
+container.addEventListener("pointermove", (e) => {
+  if (activePointers.has(e.pointerId)) {
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  }
+
+  // Одиночный указатель
+  if (activePointers.size === 1) {
+    if (dragTarget) {
+      const dist = Math.hypot(e.clientX - dragStartPointer.x, e.clientY - dragStartPointer.y);
+      if (dist > 6) dragHasMoved = true;
+
+      if (dragHasMoved) {
+        const dx = Math.round((e.clientX - dragStartPointer.x) / (S * transform.k));
+        const dy = Math.round((e.clientY - dragStartPointer.y) / (S * transform.k));
+        const nx = dragOriginalPos.x + dx;
+        const ny = dragOriginalPos.y + dy;
+        dragTarget.elem.x = nx;
+        dragTarget.elem.y = ny;
+        dragTarget.g.setAttribute("transform", `translate(${nx * S}, ${ny * S})`);
+      }
+      return;
+    }
+
+    if (isPanning) {
+      transform.x = e.clientX - panStart.x;
+      transform.y = e.clientY - panStart.y;
+      updateTransform();
+      return;
+    }
+
+    if (currentTool === "wire") {
+      const pt = screenToGrid(e.clientX, e.clientY);
+      snapCursor.setAttribute("cx", pt.wx);
+      snapCursor.setAttribute("cy", pt.wy);
+      snapCursor.style.display = "block";
+
+      if (wireStartPoint) {
+        tempWire.setAttribute("x2", pt.wx);
+        tempWire.setAttribute("y2", pt.wy);
+      }
+    }
+  } 
+  // Сенсорное масштабирование двумя пальцами
+  else if (activePointers.size === 2) {
+    const pts = Array.from(activePointers.values());
+    const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    if (pinchInitialDist > 0) {
+      const factor = dist / pinchInitialDist;
+      const midX = (pts[0].x + pts[1].x) / 2;
+      const midY = (pts[0].y + pts[1].y) / 2;
+      const newK = Math.max(0.15, Math.min(4.0, pinchInitialScale * factor));
+      transform.x = midX - (midX - transform.x) * (newK / transform.k);
+      transform.y = midY - (midY - transform.y) * (newK / transform.k);
+      transform.k = newK;
+      updateTransform();
+    }
+  }
+});
+
+function handlePointerEnd(e) {
+  if (dragTarget) {
+    try { dragTarget.g.releasePointerCapture(e.pointerId); } catch(_) {}
+
+    // Если пальцем просто тапнули (без сдвига) — это переключение тумблера!
+    if (!dragHasMoved) {
+      if (dragTarget.elem.type === "INPUT") {
+        const id = dragTarget.elem.id;
+        inputStates[id] = (inputStates[id] === 1) ? 0 : 1;
+        const nVal = inputStates[id];
+        const nY = nVal === 1 ? -22 : -36;
+        const lb = dragTarget.g.querySelector(".lever-body");
+        const lh = dragTarget.g.querySelector(".lever-handle");
+        const sv = dragTarget.g.querySelector(".sw-val");
+        if (lb) lb.setAttribute("y", nY);
+        if (lh) lh.setAttribute("y", nY + 8);
+        if (sv) sv.textContent = nVal;
+
+        if (isSimulating) {
+          runSimulation();
+        }
+      }
+    } 
+    // Если перетаскивали — сохраняем новые координаты и обновляем цепи
+    else {
+      renderCircuit(circuitData);
+      if (isSimulating) runSimulation();
+    }
+    dragTarget = null;
+  }
+
+  isPanning = false;
+  activePointers.delete(e.pointerId);
+}
+
+container.addEventListener("pointerup", handlePointerEnd);
+container.addEventListener("pointercancel", handlePointerEnd);
+
+// Колёсико мыши (ПК)
+container.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
+  const mouseX = e.clientX;
+  const mouseY = e.clientY;
+  transform.x = mouseX - (mouseX - transform.x) * zoomFactor;
+  transform.y = mouseY - (mouseY - transform.y) * zoomFactor;
+  transform.k = Math.max(0.15, Math.min(4.0, transform.k * zoomFactor));
+  updateTransform();
+}, { passive: false });
+
+// --- ПЕРЕКЛЮЧЕНИЕ ИНСТРУМЕНТОВ ---
+function setTool(toolName) {
+  currentTool = toolName;
+  document.querySelectorAll("#app-bar button").forEach(b => b.classList.remove("active-tool"));
+  const btn = document.getElementById(`tool-${toolName}`);
+  if (btn) btn.classList.add("active-tool");
+
+  document.body.className = `mode-${toolName}`;
+  wireStartPoint = null;
+  tempWire.style.display = "none";
+  snapCursor.style.display = "none";
+}
+
+document.getElementById("tool-select").onclick = () => setTool("select");
+document.getElementById("tool-wire").onclick = () => setTool("wire");
+document.getElementById("tool-delete").onclick = () => setTool("delete");
+
+// Сброс по Escape
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") setTool("select");
+});
+
+// --- ДОБАВЛЕНИЕ КОМПОНЕНТОВ ---
+document.querySelectorAll("[data-add]").forEach(btn => {
+  btn.onclick = () => {
+    const type = btn.dataset.add;
+    const centerScreen = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+    const pt = screenToGrid(centerScreen.x, centerScreen.y);
+
+    let newElem = {
+      id: nextObjId++,
+      type: type,
+      x: pt.gx,
+      y: pt.gy
+    };
+
+    if (type === "INPUT") {
+      const cnt = circuitData.elements.filter(e => e.type === "INPUT").length;
+      newElem.label = String.fromCharCode(65 + (cnt % 26));
+      inputStates[newElem.id] = 0;
+    } else if (type === "OUTPUT") {
+      const cnt = circuitData.elements.filter(e => e.type === "OUTPUT").length;
+      newElem.label = cnt === 0 ? "Y" : `Y${cnt}`;
+    } else if (type === "LABEL") {
+      newElem.text = prompt("Текст метки:", "1)") || "1)";
+    }
+
+    circuitData.elements.push(newElem);
+    setTool("select");
+    renderCircuit(circuitData);
+    if (isSimulating) runSimulation();
+  };
+});
+
+function deleteElement(id) {
+  circuitData.elements = circuitData.elements.filter(e => e.id !== id);
+  renderCircuit(circuitData);
+  if (isSimulating) runSimulation();
+}
+
+document.getElementById("btn-clear").onclick = () => {
+  if (confirm("Очистить всю схему?")) {
+    circuitData = { elements: [] };
+    wireStartPoint = null;
+    renderCircuit(circuitData);
+  }
+};
+
+// --- УПРАВЛЕНИЕ СИМУЛЯЦИЕЙ ---
 btnStart.onclick = () => {
-  if (!circuitData) return;
+  if (!circuitData || !circuitData.elements || circuitData.elements.length === 0) return;
   isSimulating = true;
   btnStart.disabled = true;
-  btnStart.classList.add("sim-active");
+  btnStart.classList.add("sim-running");
   btnStop.disabled = false;
+  netlist = buildNetlist(circuitData);
   runSimulation();
 };
 
 btnStop.onclick = () => {
   isSimulating = false;
   btnStart.disabled = false;
-  btnStart.classList.remove("sim-active");
+  btnStart.classList.remove("sim-running");
   btnStop.disabled = true;
   updateVisuals();
 };
 
-// --- НАВИГАЦИЯ (PAN & ZOOM) ---
+// --- НАВИГАЦИЯ И МАСШТАБ ---
 function updateTransform() {
   if (isNaN(transform.x) || isNaN(transform.y) || isNaN(transform.k)) {
-    transform = { x: 40, y: 40, k: 1.0 };
+    transform = { x: 40, y: 70, k: 1.0 };
   }
   viewport.setAttribute("transform", `translate(${transform.x}, ${transform.y}) scale(${transform.k})`);
 }
@@ -601,11 +953,11 @@ function fitToScreen() {
   try {
     const bbox = viewport.getBBox();
     if (!bbox || isNaN(bbox.x) || isNaN(bbox.width) || bbox.width <= 0 || bbox.height <= 0) {
-      transform = { x: 40, y: 40, k: 1.0 };
+      transform = { x: 40, y: 70, k: 1.0 };
       updateTransform();
       return;
     }
-    const pad = 30;
+    const pad = 35;
     const cw = window.innerWidth;
     const ch = window.innerHeight;
     const scale = Math.min((cw - pad * 2) / bbox.width, (ch - pad * 2) / bbox.height, 1.2);
@@ -614,81 +966,28 @@ function fitToScreen() {
     transform.y = (ch - bbox.height * transform.k) / 2 - bbox.y * transform.k;
     updateTransform();
   } catch (e) {
-    transform = { x: 40, y: 40, k: 1.0 };
+    transform = { x: 40, y: 70, k: 1.0 };
     updateTransform();
   }
 }
 
-const container = document.getElementById("canvas-container");
-container.addEventListener("mousedown", (e) => {
-  isPanning = true;
-  startPan.x = e.clientX - transform.x;
-  startPan.y = e.clientY - transform.y;
-});
-window.addEventListener("mousemove", (e) => {
-  if (isPanning) {
-    transform.x = e.clientX - startPan.x;
-    transform.y = e.clientY - startPan.y;
-    updateTransform();
-  }
-});
-window.addEventListener("mouseup", () => { isPanning = false; });
-
-container.addEventListener("wheel", (e) => {
-  e.preventDefault();
-  const zoomFactor = e.deltaY < 0 ? 1.15 : 0.87;
-  const mouseX = e.clientX;
-  const mouseY = e.clientY;
-  transform.x = mouseX - (mouseX - transform.x) * zoomFactor;
-  transform.y = mouseY - (mouseY - transform.y) * zoomFactor;
-  transform.k *= zoomFactor;
-  updateTransform();
-}, { passive: false });
-
-let touchStartDist = 0;
-container.addEventListener("touchstart", (e) => {
-  if (e.touches.length === 1) {
-    isPanning = true;
-    startPan.x = e.touches[0].clientX - transform.x;
-    startPan.y = e.touches[0].clientY - transform.y;
-  } else if (e.touches.length === 2) {
-    isPanning = false;
-    touchStartDist = Math.hypot(
-      e.touches[0].clientX - e.touches[1].clientX,
-      e.touches[0].clientY - e.touches[1].clientY
-    );
-  }
-});
-
-container.addEventListener("touchmove", (e) => {
-  if (e.touches.length === 1 && isPanning) {
-    transform.x = e.touches[0].clientX - startPan.x;
-    transform.y = e.touches[0].clientY - startPan.y;
-    updateTransform();
-  } else if (e.touches.length === 2 && touchStartDist > 0) {
-    const dist = Math.hypot(
-      e.touches[0].clientX - e.touches[1].clientX,
-      e.touches[0].clientY - e.touches[1].clientY
-    );
-    const factor = dist / touchStartDist;
-    transform.k = Math.max(0.1, transform.k * factor);
-    touchStartDist = dist;
-    updateTransform();
-  }
-});
-
-container.addEventListener("touchend", () => {
-  isPanning = false;
-  touchStartDist = 0;
-});
-
 document.getElementById("btn-fit").onclick = fitToScreen;
 document.getElementById("btn-reset-zoom").onclick = () => {
-  transform = { x: 40, y: 40, k: 1.0 };
+  transform = { x: 40, y: 70, k: 1.0 };
   updateTransform();
 };
 
-// --- СОХРАНЕНИЕ В PNG ---
+// --- СОХРАНЕНИЕ В JSON ---
+document.getElementById("btn-save-json").onclick = () => {
+  const jsonStr = JSON.stringify(circuitData, null, 2);
+  const blob = new Blob([jsonStr], { type: "application/json" });
+  const a = document.createElement("a");
+  a.download = "deeds_circuit.json";
+  a.href = URL.createObjectURL(blob);
+  a.click();
+};
+
+// --- ЭКСПОРТ В PNG С ПОЛНЫМИ СТИЛЯМИ ---
 document.getElementById("btn-export-png").onclick = () => {
   try {
     const bbox = viewport.getBBox();
@@ -721,6 +1020,8 @@ document.getElementById("btn-export-png").onclick = () => {
 
     const expVp = exportSvg.getElementById("viewport");
     expVp.setAttribute("transform", `translate(${-bbox.x + pad}, ${-bbox.y + pad}) scale(1)`);
+    expVp.querySelector("#temp-wire")?.remove();
+    expVp.querySelector("#snap-cursor")?.remove();
 
     const xml = new XMLSerializer().serializeToString(exportSvg);
     const svgBlob = new Blob([xml], { type: "image/svg+xml;charset=utf-8" });
@@ -739,7 +1040,7 @@ document.getElementById("btn-export-png").onclick = () => {
       URL.revokeObjectURL(url);
 
       const a = document.createElement("a");
-      a.download = isSimulating ? "deeds_circuit_simulated.png" : "deeds_circuit.png";
+      a.download = isSimulating ? "deeds_circuit_sim.png" : "deeds_circuit.png";
       a.href = canvas.toDataURL("image/png");
       a.click();
     };
@@ -749,7 +1050,7 @@ document.getElementById("btn-export-png").onclick = () => {
   }
 };
 
-// --- ЗАГРУЗКА ---
+// --- ЗАГРУЗКА (.pbs, .txt, .json) ---
 function loadFile(file) {
   const reader = new FileReader();
   reader.onerror = () => alert("Ошибка чтения файла");
@@ -766,7 +1067,6 @@ function loadFile(file) {
         if (text.trim().startsWith("{")) {
           circuitData = JSON.parse(text);
           renderCircuit(circuitData);
-          info.innerText = `${file.name} (${circuitData.elements.length} эл.)`;
           fitToScreen();
           return;
         }
@@ -774,21 +1074,15 @@ function loadFile(file) {
         if (!bytes || bytes.length === 0) bytes = parseRawHex(text);
       }
 
-      if (!bytes || bytes.length === 0) {
-        return alert("Не удалось распознать формат схемы");
-      }
+      if (!bytes || bytes.length === 0) return alert("Не удалось распознать формат файла");
 
       circuitData = parsePBS(bytes);
-      // Сброс симуляции при открытии нового файла
       isSimulating = false;
       btnStart.disabled = false;
-      btnStart.classList.remove("sim-active");
+      btnStart.classList.remove("sim-running");
       btnStop.disabled = true;
-      inputStates = {};
-      outputStates = {};
 
       renderCircuit(circuitData);
-      info.innerText = `${file.name} (${circuitData.elements.length} эл.)`;
       setTimeout(fitToScreen, 50);
     } catch (err) {
       console.error(err);
